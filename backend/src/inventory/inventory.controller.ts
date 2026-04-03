@@ -33,4 +33,22 @@ export class InventoryController {
   ) {
     return this.inventoryService.adjustStock(productId, body.quantity, body.reason, req.user);
   }
+
+  @Post(':productId/batches')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  createStockBatch(
+    @Param('productId') productId: string,
+    @Body() body: { quantity: number; costPrice: number; reference?: string },
+    @Request() req: any,
+  ) {
+    return this.inventoryService.createStockBatch(productId, body, req.user);
+  }
+
+  @Get(':productId/batches')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  getStockBatches(@Param('productId') productId: string) {
+    return this.inventoryService.getStockBatches(productId);
+  }
 }

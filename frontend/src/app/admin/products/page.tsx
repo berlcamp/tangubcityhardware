@@ -7,12 +7,12 @@ import { Pagination } from '@/components/Pagination';
 type Unit = { unitName: string; price: number; conversionFactor: number };
 type Product = {
   id: string; name: string; sku: string; barcode?: string;
-  basePrice: number; costPrice?: number; isActive: boolean;
+  basePrice: number; isActive: boolean;
   units: Unit[];
 };
 
 const emptyForm = {
-  name: '', sku: '', barcode: '', basePrice: '', costPrice: '', isActive: true,
+  name: '', sku: '', barcode: '', basePrice: '', isActive: true,
   units: [{ unitName: 'piece', price: '', conversionFactor: '1' }],
 };
 
@@ -65,7 +65,7 @@ export default function ProductsAdmin() {
     setEditing(p);
     setForm({
       name: p.name, sku: p.sku, barcode: p.barcode || '', isActive: p.isActive,
-      basePrice: String(p.basePrice), costPrice: String(p.costPrice || ''),
+      basePrice: String(p.basePrice),
       units: p.units.map(u => ({ unitName: u.unitName, price: String(u.price), conversionFactor: String(u.conversionFactor) })),
     });
     setError('');
@@ -81,7 +81,6 @@ export default function ProductsAdmin() {
         sku: form.sku,
         barcode: form.barcode || undefined,
         basePrice: Number(form.basePrice),
-        costPrice: form.costPrice ? Number(form.costPrice) : undefined,
         isActive: form.isActive,
         units: form.units.map(u => ({
           unitName: u.unitName,
@@ -266,22 +265,12 @@ export default function ProductsAdmin() {
                       placeholder="Optional"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-medium text-slate-600 mb-1.5">Base Price (PHP)</label>
                     <input
                       type="number"
                       value={form.basePrice}
                       onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Cost Price (PHP)</label>
-                    <input
-                      type="number"
-                      value={form.costPrice}
-                      onChange={e => setForm(f => ({ ...f, costPrice: e.target.value }))}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                       placeholder="0.00"
                     />
@@ -322,10 +311,11 @@ export default function ProductsAdmin() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <div className="grid grid-cols-3 gap-2 px-1">
-                    <p className="text-xs text-slate-400 font-medium">Unit Name</p>
-                    <p className="text-xs text-slate-400 font-medium">Price (PHP)</p>
-                    <p className="text-xs text-slate-400 font-medium">Factor</p>
+                  <div className="flex gap-2 items-center">
+                    <p className="flex-1 text-xs text-slate-400 font-medium">Unit Name</p>
+                    <p className="w-24 text-xs text-slate-400 font-medium">Price (PHP)</p>
+                    <p className="w-20 text-xs text-slate-400 font-medium">Qty / Unit</p>
+                    <div className="w-7 flex-shrink-0" />
                   </div>
                   {form.units.map((u, i) => (
                     <div key={i} className="flex gap-2 items-center">
@@ -359,7 +349,7 @@ export default function ProductsAdmin() {
                       )}
                     </div>
                   ))}
-                  <p className="text-xs text-slate-400 px-1">Factor = how many base units in this unit (e.g. bundle of 6 = 6)</p>
+                  <p className="text-xs text-slate-400">Qty / Unit = how many base units make up this unit (e.g. a bundle of 6 pieces → enter 6)</p>
                 </div>
               </div>
             </div>

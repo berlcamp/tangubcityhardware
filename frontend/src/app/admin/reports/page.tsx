@@ -132,6 +132,21 @@ export default function ReportsPage() {
                 <div className="text-xs text-gray-500 uppercase tracking-wide">Avg per Transaction</div>
                 <div className="text-3xl font-bold text-gray-700 mt-1">₱{formatPHP(summary.avgTransaction)}</div>
               </div>
+              <div className="bg-white rounded-xl border p-5 shadow-sm">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Total Cost (COGS)</div>
+                <div className="text-3xl font-bold text-orange-600 mt-1">₱{formatPHP(summary.totalCost ?? 0)}</div>
+              </div>
+              <div className="bg-white rounded-xl border p-5 shadow-sm">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Gross Profit</div>
+                <div className={`text-3xl font-bold mt-1 ${(summary.totalProfit ?? 0) >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
+                  ₱{formatPHP(summary.totalProfit ?? 0)}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{summary.profitMargin ?? 0}% margin</div>
+              </div>
+              <div className="bg-white rounded-xl border p-5 shadow-sm">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Total Discounts</div>
+                <div className="text-3xl font-bold text-red-500 mt-1">₱{formatPHP(summary.totalDiscount ?? 0)}</div>
+              </div>
             </div>
           )}
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -172,6 +187,9 @@ export default function ReportsPage() {
                 <th className="px-4 py-3 text-left">SKU</th>
                 <th className="px-4 py-3 text-right">Units Sold</th>
                 <th className="px-4 py-3 text-right">Revenue</th>
+                <th className="px-4 py-3 text-right">Cost</th>
+                <th className="px-4 py-3 text-right">Profit</th>
+                <th className="px-4 py-3 text-right">Margin</th>
               </tr>
             </thead>
             <tbody>
@@ -182,10 +200,13 @@ export default function ReportsPage() {
                   <td className="px-4 py-3 text-gray-500">{p.sku}</td>
                   <td className="px-4 py-3 text-right">{Number(p.totalQty).toFixed(0)}</td>
                   <td className="px-4 py-3 text-right font-medium text-green-700">₱{formatPHP(p.totalRevenue)}</td>
+                  <td className="px-4 py-3 text-right text-orange-600">₱{formatPHP(p.totalCost ?? 0)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-indigo-700">₱{formatPHP(p.totalProfit ?? 0)}</td>
+                  <td className="px-4 py-3 text-right text-gray-500">{p.profitMargin ?? 0}%</td>
                 </tr>
               ))}
               {topProducts.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No sales data in this period</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No sales data in this period</td></tr>
               )}
             </tbody>
           </table>

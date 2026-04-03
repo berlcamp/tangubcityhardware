@@ -14,15 +14,15 @@ model Product {
   sku         String   @unique
   barcode     String?  @unique
   basePrice   Decimal  @map("base_price") @db.Decimal(12, 2)
-  costPrice   Decimal? @map("cost_price") @db.Decimal(12, 2)
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  units     ProductUnit[]
-  inventory Inventory?
-  saleItems SaleItem[]
-  movements InventoryMovement[]
+  units        ProductUnit[]
+  inventory    Inventory?
+  saleItems    SaleItem[]
+  movements    InventoryMovement[]
+  stockBatches StockBatch[]
 
   @@map("products")
 }
@@ -92,6 +92,7 @@ model SaleItem {
   unitName  String  @map("unit_name")
   quantity  Decimal @db.Decimal(12, 4)
   price     Decimal @db.Decimal(12, 2)
+  costPrice Decimal @default(0) @map("cost_price") @db.Decimal(12, 2)
   discount  Decimal @default(0) @db.Decimal(12, 2)
   total     Decimal @db.Decimal(12, 2)
 
@@ -168,4 +169,21 @@ model InventoryMovement {
 
   @@index([productId, createdAt])
   @@map("inventory_movements")
+}
+
+model StockBatch {
+  id         String   @id @default(uuid())
+  productId  String   @map("product_id")
+  quantity   Decimal  @db.Decimal(12, 4)
+  initialQty Decimal  @map("initial_qty") @db.Decimal(12, 4)
+  costPrice  Decimal  @map("cost_price") @db.Decimal(12, 2)
+  reference  String?
+  receivedAt DateTime @default(now()) @map("received_at")
+  userId     String?  @map("user_id")
+  userName   String?  @map("user_name")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId, receivedAt])
+  @@map("stock_batches")
 }

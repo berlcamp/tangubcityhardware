@@ -60,6 +60,7 @@ export class SalesService {
         price: item.price,
         discount: itemDiscount,
         total: itemTotal,
+        costPrice: 0, // computed via FIFO inside transaction
       });
     }
 
@@ -80,6 +81,39 @@ export class SalesService {
 
     // Create sale in transaction
     const sale = await this.prisma.$transaction(async (tx) => {
+      // FIFO: compute costPrice per item and deduct from stock batches
+      for (let i = 0; i < computedItems.length; i++) {
+        const ci = computedItems[i];
+        const update = inventoryUpdates.find((u) => u.productId === ci.productId);
+        if (!update) continue;
+
+        const baseQtyToDeduct = update.deduct;
+        const conversionFactor = baseQtyToDeduct / ci.quantity;
+
+        const batches = await tx.stockBatch.findMany({
+          where: { productId: ci.productId, quantity: { gt: 0 } },
+          orderBy: { receivedAt: 'asc' },
+        });
+
+        let remaining = baseQtyToDeduct;
+        let totalBaseCost = 0;
+
+        for (const batch of batches) {
+          if (remaining <= 0) break;
+          const batchAvail = Number(batch.quantity);
+          const consumed = Math.min(batchAvail, remaining);
+          totalBaseCost += consumed * Number(batch.costPrice);
+          await tx.stockBatch.update({
+            where: { id: batch.id },
+            data: { quantity: batchAvail - consumed },
+          });
+          remaining -= consumed;
+        }
+
+        const weightedAvgBaseCost = baseQtyToDeduct > 0 ? totalBaseCost / baseQtyToDeduct : 0;
+        computedItems[i].costPrice = Number((weightedAvgBaseCost * conversionFactor).toFixed(2));
+      }
+
       const created = await tx.sale.create({
         data: {
           receiptNumber,
@@ -182,14 +216,22 @@ export class SalesService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const sales = await this.prisma.sale.findMany({
-      where: { createdAt: { gte: today } },
-      select: { total: true },
-    });
+    const [salesCount, items] = await Promise.all([
+      this.prisma.sale.count({ where: { createdAt: { gte: today } } }),
+      this.prisma.saleItem.findMany({
+        where: { sale: { createdAt: { gte: today } } },
+        select: { total: true, costPrice: true, quantity: true },
+      }),
+    ]);
+
+    const totalRevenue = items.reduce((s, x) => s + Number(x.total), 0);
+    const totalCost = items.reduce((s, x) => s + Number(x.costPrice) * Number(x.quantity), 0);
 
     return {
-      totalSales: sales.length,
-      totalRevenue: sales.reduce((s, x) => s + Number(x.total), 0).toFixed(2),
+      totalSales: salesCount,
+      totalRevenue: totalRevenue.toFixed(2),
+      totalCost: totalCost.toFixed(2),
+      totalProfit: (totalRevenue - totalCost).toFixed(2),
     };
   }
 }

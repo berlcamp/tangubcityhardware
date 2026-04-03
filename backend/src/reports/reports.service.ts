@@ -36,25 +36,40 @@ export class ReportsService {
 
   async salesSummary(from?: string, to?: string) {
     const where: any = {};
+    const itemWhere: any = {};
     if (from || to) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
+      itemWhere.sale = { createdAt: {} };
+      if (from) {
+        where.createdAt.gte = new Date(from);
+        itemWhere.sale.createdAt.gte = new Date(from);
+      }
       if (to) {
         const toDate = new Date(to);
         toDate.setHours(23, 59, 59, 999);
         where.createdAt.lte = toDate;
+        itemWhere.sale.createdAt.lte = toDate;
       }
     }
 
-    const sales = await this.prisma.sale.findMany({
-      where,
-      select: { total: true, discount: true, paymentMethod: true },
-    });
+    const [sales, items] = await Promise.all([
+      this.prisma.sale.findMany({
+        where,
+        select: { total: true, discount: true, paymentMethod: true },
+      }),
+      this.prisma.saleItem.findMany({
+        where: itemWhere,
+        select: { total: true, costPrice: true, quantity: true },
+      }),
+    ]);
 
     const totalTransactions = sales.length;
     const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
     const totalDiscount = sales.reduce((s, x) => s + Number(x.discount), 0);
     const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+    const totalCost = items.reduce((s, x) => s + Number(x.costPrice) * Number(x.quantity), 0);
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
     const paymentCounts: Record<string, number> = {};
     for (const s of sales) {
@@ -66,6 +81,9 @@ export class ReportsService {
       totalRevenue: Number(totalRevenue.toFixed(2)),
       totalDiscount: Number(totalDiscount.toFixed(2)),
       avgTransaction: Number(avgTransaction.toFixed(2)),
+      totalCost: Number(totalCost.toFixed(2)),
+      totalProfit: Number(totalProfit.toFixed(2)),
+      profitMargin: Number(profitMargin.toFixed(2)),
       paymentCounts,
     };
   }
@@ -84,20 +102,34 @@ export class ReportsService {
 
     const items = await this.prisma.saleItem.findMany({
       where,
-      include: { product: { select: { id: true, name: true, sku: true } } },
+      select: {
+        productId: true,
+        quantity: true,
+        total: true,
+        costPrice: true,
+        product: { select: { id: true, name: true, sku: true } },
+      },
     });
 
-    const map: Record<string, { productId: string; name: string; sku: string; totalQty: number; totalRevenue: number }> = {};
+    const map: Record<string, { productId: string; name: string; sku: string; totalQty: number; totalRevenue: number; totalCost: number }> = {};
     for (const item of items) {
       const key = item.productId;
       if (!map[key]) {
-        map[key] = { productId: key, name: item.product.name, sku: item.product.sku, totalQty: 0, totalRevenue: 0 };
+        map[key] = { productId: key, name: item.product.name, sku: item.product.sku, totalQty: 0, totalRevenue: 0, totalCost: 0 };
       }
       map[key].totalQty = Number((map[key].totalQty + Number(item.quantity)).toFixed(4));
       map[key].totalRevenue = Number((map[key].totalRevenue + Number(item.total)).toFixed(2));
+      map[key].totalCost = Number((map[key].totalCost + Number(item.costPrice) * Number(item.quantity)).toFixed(2));
     }
 
     return Object.values(map)
+      .map((p) => ({
+        ...p,
+        totalProfit: Number((p.totalRevenue - p.totalCost).toFixed(2)),
+        profitMargin: p.totalRevenue > 0
+          ? Number(((p.totalRevenue - p.totalCost) / p.totalRevenue * 100).toFixed(2))
+          : 0,
+      }))
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, limit);
   }

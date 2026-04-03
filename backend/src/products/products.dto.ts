@@ -30,18 +30,10 @@ export class CreateProductDto {
   @IsNumber()
   basePrice: number;
 
-  @IsOptional()
-  @IsNumber()
-  costPrice?: number;
-
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ProductUnitDto)
   units: ProductUnitDto[];
-
-  @IsOptional()
-  @IsNumber()
-  initialStock?: number;
 
   @IsOptional()
   @IsNumber()
@@ -68,8 +60,4 @@ export class UpdateProductDto {
   @IsOptional()
   @IsNumber()
   basePrice?: number;
-
-  @IsOptional()
-  @IsNumber()
-  costPrice?: number;
 }

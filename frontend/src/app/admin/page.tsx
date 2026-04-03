@@ -40,7 +40,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-xl p-5 shadow-sm border">
           <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Today&apos;s Transactions</div>
           <div className="text-3xl font-bold text-blue-700">{summary?.totalSales ?? '—'}</div>
@@ -52,6 +52,13 @@ export default function AdminDashboard() {
             ₱{summary ? formatPHP(Number(summary.totalRevenue)) : '—'}
           </div>
           <div className="text-xs text-gray-400 mt-1">gross sales</div>
+        </div>
+        <div className="bg-white rounded-xl p-5 shadow-sm border">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Today&apos;s Profit</div>
+          <div className={`text-3xl font-bold ${summary && Number(summary.totalProfit) >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
+            {summary ? `₱${formatPHP(Number(summary.totalProfit))}` : '—'}
+          </div>
+          <div className="text-xs text-gray-400 mt-1">gross profit</div>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border">
           <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Low Stock Items</div>

@@ -48,6 +48,77 @@ export class InventoryService {
     `;
   }
 
+  async createStockBatch(
+    productId: string,
+    data: { quantity: number; costPrice: number; reference?: string },
+    user?: { id?: string; username?: string; name?: string },
+  ) {
+    const inventory = await this.prisma.inventory.findUnique({
+      where: { productId },
+      include: { product: { select: { name: true, sku: true } } },
+    });
+
+    if (!inventory) throw new Error('Inventory record not found');
+
+    const previousQty = Number(inventory.quantity);
+    const newQty = previousQty + data.quantity;
+
+    const [batch] = await this.prisma.$transaction([
+      this.prisma.stockBatch.create({
+        data: {
+          productId,
+          quantity: data.quantity,
+          initialQty: data.quantity,
+          costPrice: data.costPrice,
+          reference: data.reference,
+          userId: user?.id,
+          userName: user?.name || user?.username,
+        },
+      }),
+      this.prisma.inventory.update({
+        where: { productId },
+        data: { quantity: newQty },
+      }),
+      this.prisma.inventoryMovement.create({
+        data: {
+          productId,
+          type: 'RESTOCK',
+          quantity: data.quantity,
+          previousQty,
+          newQty,
+          reason: data.reference || 'Stock received',
+          userId: user?.id,
+          userName: user?.name || user?.username,
+        },
+      }),
+    ]);
+
+    await this.auditService.log({
+      userId: user?.id,
+      userName: user?.name || user?.username,
+      action: 'STOCK_BATCH_CREATED',
+      entityType: 'stock_batch',
+      entityId: batch.id,
+      details: {
+        productName: inventory.product.name,
+        quantity: data.quantity,
+        costPrice: data.costPrice,
+        reference: data.reference,
+      },
+    });
+
+    await addToSyncQueue(this.prisma, 'inventory', inventory.id, 'UPDATE', { productId, quantity: newQty });
+
+    return batch;
+  }
+
+  async getStockBatches(productId: string) {
+    return this.prisma.stockBatch.findMany({
+      where: { productId },
+      orderBy: { receivedAt: 'desc' },
+    });
+  }
+
   async adjustStock(
     productId: string,
     quantity: number,
@@ -64,25 +135,48 @@ export class InventoryService {
     const previousQty = Number(inventory.quantity);
     const newQty = previousQty + quantity;
 
-    const updated = await this.prisma.inventory.update({
-      where: { productId },
-      data: { quantity: newQty },
-    });
-
     const movementType = quantity > 0 ? 'RESTOCK' : 'ADJUSTMENT';
 
-    await this.prisma.inventoryMovement.create({
-      data: {
-        productId,
-        type: movementType,
-        quantity,
-        previousQty,
-        newQty,
-        reason,
-        userId: user?.id,
-        userName: user?.name || user?.username,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.inventory.update({
+        where: { productId },
+        data: { quantity: newQty },
+      });
+
+      // For negative adjustments, deduct from FIFO batches
+      if (quantity < 0) {
+        let remaining = Math.abs(quantity);
+        const batches = await tx.stockBatch.findMany({
+          where: { productId, quantity: { gt: 0 } },
+          orderBy: { receivedAt: 'asc' },
+        });
+        for (const batch of batches) {
+          if (remaining <= 0) break;
+          const batchQty = Number(batch.quantity);
+          const deduct = Math.min(batchQty, remaining);
+          await tx.stockBatch.update({
+            where: { id: batch.id },
+            data: { quantity: batchQty - deduct },
+          });
+          remaining -= deduct;
+        }
+      }
+
+      await tx.inventoryMovement.create({
+        data: {
+          productId,
+          type: movementType,
+          quantity,
+          previousQty,
+          newQty,
+          reason,
+          userId: user?.id,
+          userName: user?.name || user?.username,
+        },
+      });
     });
+
+    const updated = await this.prisma.inventory.findUnique({ where: { productId } });
 
     await this.auditService.log({
       userId: user?.id,
@@ -100,7 +194,7 @@ export class InventoryService {
       },
     });
 
-    await addToSyncQueue(this.prisma, 'inventory', updated.id, 'UPDATE', updated);
+    await addToSyncQueue(this.prisma, 'inventory', updated!.id, 'UPDATE', updated);
 
     return updated;
   }

@@ -27,16 +27,21 @@ export default function InventoryAdmin() {
   const [adjusting, setAdjusting] = useState<any | null>(null);
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
-  const [adjustType, setAdjustType] = useState<'RESTOCK' | 'ADJUSTMENT'>('RESTOCK');
   const [saving, setSaving] = useState(false);
 
-  // Receive stock modal
+  // Receive stock (batch) modal
   const [showReceive, setShowReceive] = useState(false);
   const [receiveProduct, setReceiveProduct] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
+  const [receiveCostPrice, setReceiveCostPrice] = useState('');
   const [receiveReason, setReceiveReason] = useState('Purchase');
   const [receiveNotes, setReceiveNotes] = useState('');
   const [receiveSaving, setReceiveSaving] = useState(false);
+
+  // Batches modal
+  const [batchesProduct, setBatchesProduct] = useState<any | null>(null);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
 
   // History modal
   const [historyProduct, setHistoryProduct] = useState<any | null>(null);
@@ -47,12 +52,13 @@ export default function InventoryAdmin() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (historyProduct) { setHistoryProduct(null); setHistory([]); }
+      else if (batchesProduct) { setBatchesProduct(null); setBatches([]); }
       else if (adjusting) { setAdjusting(null); setAdjustQty(''); setAdjustReason(''); }
       else if (showReceive) { setShowReceive(false); }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [historyProduct, adjusting, showReceive]);
+  }, [historyProduct, batchesProduct, adjusting, showReceive]);
 
   const load = useCallback((p = page, s = search) => {
     setLoading(true);
@@ -94,15 +100,33 @@ export default function InventoryAdmin() {
     }
   };
 
+  const openBatches = async (item: any) => {
+    setBatchesProduct(item);
+    setBatchesLoading(true);
+    try {
+      const data = await api.inventory.getBatches(item.productId);
+      setBatches(data || []);
+    } catch {
+      setBatches([]);
+    } finally {
+      setBatchesLoading(false);
+    }
+  };
+
   const handleReceiveStock = async () => {
-    if (!receiveProduct || !receiveQty) return;
+    if (!receiveProduct || !receiveQty || !receiveCostPrice) return;
     setReceiveSaving(true);
     try {
-      const reason = `${receiveReason}${receiveNotes ? ': ' + receiveNotes : ''}`;
-      await api.inventory.adjust(receiveProduct, Math.abs(Number(receiveQty)), reason);
+      const reference = `${receiveReason}${receiveNotes ? ': ' + receiveNotes : ''}`;
+      await api.inventory.addBatch(receiveProduct, {
+        quantity: Math.abs(Number(receiveQty)),
+        costPrice: Number(receiveCostPrice),
+        reference,
+      });
       setShowReceive(false);
       setReceiveProduct('');
       setReceiveQty('');
+      setReceiveCostPrice('');
       setReceiveNotes('');
       load();
     } catch (e: any) {
@@ -116,8 +140,8 @@ export default function InventoryAdmin() {
     if (!adjusting || adjustQty === '') return;
     setSaving(true);
     try {
-      const qty = adjustType === 'RESTOCK' ? Math.abs(Number(adjustQty)) : -Math.abs(Number(adjustQty));
-      await api.inventory.adjust(adjusting.productId, qty, adjustReason || adjustType);
+      const qty = -Math.abs(Number(adjustQty));
+      await api.inventory.adjust(adjusting.productId, qty, adjustReason || 'ADJUSTMENT');
       setAdjusting(null);
       setAdjustQty('');
       setAdjustReason('');
@@ -183,8 +207,9 @@ export default function InventoryAdmin() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-3">
+                      <button onClick={() => openBatches(item)} className="text-purple-600 hover:underline text-sm">Batches</button>
                       <button onClick={() => openHistory(item)} className="text-gray-500 hover:text-gray-700 text-sm">History</button>
-                      <button onClick={() => { setAdjusting(item); setAdjustQty(''); setAdjustReason(''); setAdjustType('RESTOCK'); }} className="text-blue-600 hover:underline text-sm">Adjust</button>
+                      <button onClick={() => { setAdjusting(item); setAdjustQty(''); setAdjustReason(''); }} className="text-blue-600 hover:underline text-sm">Adjust</button>
                     </td>
                   </tr>
                 );
@@ -255,6 +280,21 @@ export default function InventoryAdmin() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Cost Price per Unit (PHP) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={receiveCostPrice}
+                  onChange={e => setReceiveCostPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+                <p className="text-xs text-slate-400 mt-1">Cost per base unit (e.g. per piece, per kg)</p>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Reason</label>
                 <select
                   value={receiveReason}
@@ -289,7 +329,7 @@ export default function InventoryAdmin() {
               </button>
               <button
                 onClick={handleReceiveStock}
-                disabled={receiveSaving || !receiveProduct || !receiveQty}
+                disabled={receiveSaving || !receiveProduct || !receiveQty || !receiveCostPrice}
                 className="px-5 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm shadow-emerald-200"
               >
                 {receiveSaving ? 'Saving…' : 'Receive Stock'}
@@ -325,31 +365,9 @@ export default function InventoryAdmin() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Adjustment Type</p>
-                <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-                  <button
-                    onClick={() => setAdjustType('RESTOCK')}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-                      adjustType === 'RESTOCK'
-                        ? 'bg-white text-emerald-700 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    + Add Stock
-                  </button>
-                  <button
-                    onClick={() => setAdjustType('ADJUSTMENT')}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-                      adjustType === 'ADJUSTMENT'
-                        ? 'bg-white text-red-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    − Remove Stock
-                  </button>
-                </div>
-              </div>
+              <p className="text-xs text-slate-500">
+                Removes stock from inventory (e.g. damaged goods, count correction). To add stock, use <strong>Receive Stock</strong>.
+              </p>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Quantity</label>
                 <input
@@ -389,6 +407,85 @@ export default function InventoryAdmin() {
               >
                 {saving ? 'Saving…' : 'Apply Adjustment'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batches Modal */}
+      {batchesProduct && (
+        <div
+          className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            className="modal-panel bg-white rounded-2xl w-full max-w-2xl flex flex-col overflow-hidden"
+            style={{ boxShadow: '0 25px 60px -12px rgba(15, 23, 42, 0.35)' }}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100"
+                 style={{ background: 'linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%)' }}>
+              <div>
+                <h3 className="font-semibold text-slate-900 tracking-tight">Stock Batches</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{batchesProduct.product?.name}</p>
+              </div>
+              <button
+                onClick={() => { setBatchesProduct(null); setBatches([]); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 p-4 overflow-auto" style={{ maxHeight: '70vh' }}>
+              {batchesLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <svg className="animate-spin w-6 h-6 mb-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  <span className="text-sm">Loading batches…</span>
+                </div>
+              ) : batches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <p className="text-sm font-medium text-slate-500">No stock batches yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Receive stock to create batches</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10">
+                    <tr style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}
+                        className="border-b border-slate-200 text-left">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Received</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Reference</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Initial Qty</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Remaining</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Cost/Unit</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {batches.map((b: any) => {
+                      const remaining = Number(b.quantity);
+                      const depleted = remaining <= 0;
+                      return (
+                        <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                            {new Date(b.receivedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 text-xs max-w-[140px] truncate">{b.reference || '—'}</td>
+                          <td className="px-4 py-3 text-right text-slate-500 text-xs">{Number(b.initialQty)}</td>
+                          <td className={`px-4 py-3 text-right font-semibold ${depleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                            {remaining}
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-purple-700">
+                            ₱{Number(b.costPrice).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400 text-xs">{b.userName || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

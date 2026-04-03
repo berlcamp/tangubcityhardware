@@ -4,7 +4,7 @@
   "private": true,
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "NODE_ENV=development electron .",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "publish:win": "electron-builder --win --publish always"
@@ -24,7 +24,10 @@
       "output": "dist"
     },
     "files": [
-      "main.js"
+      "main.js",
+      "preload.js",
+      "setup.html",
+      "assets/**/*"
     ],
     "extraResources": [
       {

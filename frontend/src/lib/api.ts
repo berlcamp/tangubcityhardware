@@ -1,6 +1,8 @@
 import { auth } from './auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+// Relative URL — Next.js proxies this to BACKEND_URL env var at runtime.
+// This avoids baking the server IP into the JS bundle at build time.
+const API_BASE = '/api/backend/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = auth.getToken();
@@ -69,6 +71,13 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ quantity, reason }),
       }),
+    addBatch: (productId: string, data: { quantity: number; costPrice: number; reference?: string }) =>
+      request<any>(`/inventory/${productId}/batches`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getBatches: (productId: string) =>
+      request<any[]>(`/inventory/${productId}/batches`),
   },
   users: {
     getAll: (page = 1, limit = 20) =>

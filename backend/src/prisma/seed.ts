@@ -85,7 +85,6 @@ async function main() {
         sku: p.sku,
         barcode: p.barcode,
         basePrice: p.basePrice,
-        costPrice: p.costPrice,
         units: {
           create: p.units.map((u) => ({
             unitName: u.unitName,
@@ -97,6 +96,14 @@ async function main() {
           create: {
             quantity: p.stock,
             lowStock: 10,
+          },
+        },
+        stockBatches: {
+          create: {
+            quantity: p.stock,
+            initialQty: p.stock,
+            costPrice: p.costPrice,
+            reference: 'Initial seed stock',
           },
         },
       },

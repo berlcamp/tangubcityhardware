@@ -60,7 +60,6 @@ export class ProductsService {
         sku: dto.sku,
         barcode: dto.barcode,
         basePrice: dto.basePrice,
-        costPrice: dto.costPrice,
         units: {
           create: dto.units.map((u) => ({
             unitName: u.unitName,
@@ -70,7 +69,7 @@ export class ProductsService {
         },
         inventory: {
           create: {
-            quantity: dto.initialStock ?? 0,
+            quantity: 0,
             lowStock: dto.lowStock ?? 10,
           },
         },
@@ -99,7 +98,6 @@ export class ProductsService {
         sku: dto.sku,
         barcode: dto.barcode,
         basePrice: dto.basePrice,
-        costPrice: dto.costPrice,
       },
       include: { units: true, inventory: true },
     });
