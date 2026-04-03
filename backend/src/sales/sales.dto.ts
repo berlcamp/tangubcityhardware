@@ -8,6 +8,48 @@ import {
   Min,
 } from 'class-validator';
 
+export class ReturnItemDto {
+  @IsString()
+  saleItemId: string;
+
+  @IsNumber()
+  @Min(0.0001)
+  quantity: number;
+}
+
+export class ReturnItemsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReturnItemDto)
+  items: ReturnItemDto[];
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
+  userName?: string;
+}
+
+export class VoidSaleDto {
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
+  userName?: string;
+}
+
 export class SaleItemDto {
   @IsString()
   productId: string;

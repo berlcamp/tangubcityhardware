@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { auth } from '@/lib/auth';
 
 interface Props {
   onClose: () => void;
@@ -24,6 +25,10 @@ export function SalesHistory({ onClose, cashier }: Props) {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+
+  const user = auth.getUser();
+  const canVoid = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -45,6 +50,19 @@ export function SalesHistory({ onClose, cashier }: Props) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const handleVoid = async (sale: any) => {
+    if (!confirm(`Void receipt ${sale.receiptNumber}? This will restore inventory and refund PHP ${Number(sale.total).toFixed(2)}.`)) return;
+    setVoidingId(sale.id);
+    try {
+      await api.sales.voidSale(sale.id, { userId: user?.id, userName: user?.name, reason: 'Void by manager' });
+      await load(page);
+    } catch (err: any) {
+      alert(err.message || 'Void failed');
+    } finally {
+      setVoidingId(null);
+    }
+  };
 
   return (
     <div
@@ -102,13 +120,17 @@ export function SalesHistory({ onClose, cashier }: Props) {
                   <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Items</th>
                   <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total</th>
                   <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
+                  {canVoid && (
+                    <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {sales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={sale.id} className={`hover:bg-slate-50 transition-colors ${sale.isVoided ? 'opacity-50' : ''}`}>
                     <td className="px-6 py-3.5 font-code text-xs text-slate-600 tracking-wide">
                       {sale.receiptNumber}
+                      {sale.isVoided && <span className="ml-2 px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">VOIDED</span>}
                     </td>
                     <td className="px-6 py-3.5 text-slate-500 text-xs whitespace-nowrap">
                       {new Date(sale.createdAt).toLocaleString('en-PH', { dateStyle: 'short', timeStyle: 'short' })}
@@ -126,6 +148,19 @@ export function SalesHistory({ onClose, cashier }: Props) {
                         {sale.paymentMethod}
                       </span>
                     </td>
+                    {canVoid && (
+                      <td className="px-6 py-3.5">
+                        {!sale.isVoided && (
+                          <button
+                            onClick={() => handleVoid(sale)}
+                            disabled={voidingId === sale.id}
+                            className="px-2.5 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-40"
+                          >
+                            {voidingId === sale.id ? '...' : 'Void'}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

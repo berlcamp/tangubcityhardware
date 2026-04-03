@@ -1,6 +1,6 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSaleDto } from './sales.dto';
+import { CreateSaleDto, VoidSaleDto, ReturnItemsDto } from './sales.dto';
 import { addToSyncQueue } from '../common/sync.helper';
 import { AuditService } from '../audit/audit.service';
 
@@ -221,6 +221,203 @@ export class SalesService {
         customer: true,
       },
     });
+  }
+
+  async voidSale(id: string, dto: VoidSaleDto) {
+    const { reason, userId, userName } = dto;
+
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!sale) throw new NotFoundException('Sale not found');
+    if (sale.isVoided) throw new BadRequestException('Sale is already voided');
+
+    const saleReturn = await this.prisma.$transaction(async (tx) => {
+      // Restore stock for every item
+      for (const item of sale.items) {
+        const inventory = await tx.inventory.findUnique({ where: { productId: item.productId } });
+        if (!inventory) continue;
+
+        const restoreQty = Number(item.quantity);
+        const previousQty = Number(inventory.quantity);
+        const newQty = previousQty + restoreQty;
+
+        await tx.inventory.update({
+          where: { productId: item.productId },
+          data: { quantity: newQty },
+        });
+
+        // Add back as a new stock batch (at original cost price)
+        await tx.stockBatch.create({
+          data: {
+            productId: item.productId,
+            quantity: restoreQty,
+            initialQty: restoreQty,
+            costPrice: item.costPrice,
+            reference: `VOID:${sale.receiptNumber}`,
+            userId,
+            userName,
+          },
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            productId: item.productId,
+            type: 'RETURN',
+            quantity: restoreQty,
+            previousQty,
+            newQty,
+            reason: `Void: ${sale.receiptNumber}`,
+            referenceId: sale.id,
+            userId,
+            userName,
+          },
+        });
+      }
+
+      // Mark sale voided
+      await tx.sale.update({ where: { id }, data: { isVoided: true } });
+
+      // Record the void return
+      return tx.saleReturn.create({
+        data: {
+          saleId: id,
+          type: 'VOID',
+          reason,
+          refundAmount: sale.total,
+          createdBy: userName,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      userId,
+      userName,
+      action: 'SALE_VOIDED',
+      entityType: 'sale',
+      entityId: id,
+      details: { receiptNumber: sale.receiptNumber, refundAmount: Number(sale.total), reason },
+    });
+
+    return { saleReturn, refundAmount: Number(sale.total) };
+  }
+
+  async returnItems(id: string, dto: ReturnItemsDto) {
+    const { items: returnItems, reason, userId, userName } = dto;
+
+    const sale = await this.prisma.sale.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        returns: { include: { items: true } },
+      },
+    });
+    if (!sale) throw new NotFoundException('Sale not found');
+    if (sale.isVoided) throw new BadRequestException('Cannot return items from a voided sale');
+
+    // Calculate already-returned quantities per SaleItem
+    const alreadyReturned: Record<string, number> = {};
+    for (const ret of sale.returns) {
+      for (const ri of ret.items) {
+        alreadyReturned[ri.saleItemId] = (alreadyReturned[ri.saleItemId] || 0) + Number(ri.quantity);
+      }
+    }
+
+    // Validate return quantities
+    let totalRefund = 0;
+    const processedItems: { saleItem: any; returnQty: number; refund: number }[] = [];
+
+    for (const ri of returnItems) {
+      const saleItem = sale.items.find((i) => i.id === ri.saleItemId);
+      if (!saleItem) throw new BadRequestException(`Sale item ${ri.saleItemId} not found`);
+
+      const originalQty = Number(saleItem.quantity);
+      const returned = alreadyReturned[ri.saleItemId] || 0;
+      const available = originalQty - returned;
+
+      if (ri.quantity > available) {
+        throw new BadRequestException(
+          `Cannot return ${ri.quantity} — only ${available} available for return`,
+        );
+      }
+
+      const refund = Number(((ri.quantity / originalQty) * Number(saleItem.total)).toFixed(2));
+      totalRefund += refund;
+      processedItems.push({ saleItem, returnQty: ri.quantity, refund });
+    }
+
+    const saleReturn = await this.prisma.$transaction(async (tx) => {
+      for (const { saleItem, returnQty, refund: _ } of processedItems) {
+        const inventory = await tx.inventory.findUnique({ where: { productId: saleItem.productId } });
+        if (!inventory) continue;
+
+        const previousQty = Number(inventory.quantity);
+        const newQty = previousQty + returnQty;
+
+        await tx.inventory.update({
+          where: { productId: saleItem.productId },
+          data: { quantity: newQty },
+        });
+
+        await tx.stockBatch.create({
+          data: {
+            productId: saleItem.productId,
+            quantity: returnQty,
+            initialQty: returnQty,
+            costPrice: saleItem.costPrice,
+            reference: `RETURN:${sale.receiptNumber}`,
+            userId,
+            userName,
+          },
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            productId: saleItem.productId,
+            type: 'RETURN',
+            quantity: returnQty,
+            previousQty,
+            newQty,
+            reason: `Return: ${sale.receiptNumber}`,
+            referenceId: sale.id,
+            userId,
+            userName,
+          },
+        });
+      }
+
+      const created = await tx.saleReturn.create({
+        data: {
+          saleId: id,
+          type: 'RETURN',
+          reason,
+          refundAmount: totalRefund,
+          createdBy: userName,
+          items: {
+            create: processedItems.map(({ saleItem, returnQty, refund }) => ({
+              saleItemId: saleItem.id,
+              quantity: returnQty,
+              refund,
+            })),
+          },
+        },
+        include: { items: true },
+      });
+
+      return created;
+    });
+
+    await this.auditService.log({
+      userId,
+      userName,
+      action: 'SALE_RETURN_CREATED',
+      entityType: 'sale',
+      entityId: id,
+      details: { receiptNumber: sale.receiptNumber, refundAmount: totalRefund, reason, itemCount: returnItems.length },
+    });
+
+    return { saleReturn, refundAmount: totalRefund };
   }
 
   async todaySummary() {

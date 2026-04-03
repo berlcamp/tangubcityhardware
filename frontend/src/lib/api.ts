@@ -61,7 +61,12 @@ export const api = {
       return request<any>(`/sales?${params}`);
     },
     getById: (id: string) => request<any>(`/sales/${id}`),
+    getByReceipt: (receiptNumber: string) => request<any>(`/sales/receipt/${encodeURIComponent(receiptNumber)}`),
     todaySummary: () => request<any>('/sales/today'),
+    voidSale: (id: string, data: { reason?: string; userId?: string; userName?: string }) =>
+      request<any>(`/sales/${id}/void`, { method: 'POST', body: JSON.stringify(data) }),
+    returnItems: (id: string, data: { items: { saleItemId: string; quantity: number }[]; reason?: string; userId?: string; userName?: string }) =>
+      request<any>(`/sales/${id}/return`, { method: 'POST', body: JSON.stringify(data) }),
   },
   inventory: {
     getAll: (page = 1, limit = 20, search?: string) => {
@@ -126,6 +131,10 @@ export const api = {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       return request<any>(`/reports/inventory-movements?${params}`);
+    },
+    transactions: (date: string, page = 1, limit = 20) => {
+      const params = new URLSearchParams({ date, page: String(page), limit: String(limit) });
+      return request<any>(`/reports/transactions?${params}`);
     },
   },
   audit: {

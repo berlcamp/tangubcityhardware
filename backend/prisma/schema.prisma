@@ -77,10 +77,12 @@ model Sale {
   change        Decimal  @default(0) @db.Decimal(12, 2)
   cashier       String?
   terminalId    String?  @map("terminal_id")
+  isVoided      Boolean  @default(false) @map("is_voided")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  customer Customer?  @relation(fields: [customerId], references: [id])
+  customer Customer?    @relation(fields: [customerId], references: [id])
   items    SaleItem[]
+  returns  SaleReturn[]
 
   @@map("sales")
 }
@@ -96,10 +98,39 @@ model SaleItem {
   discount  Decimal @default(0) @db.Decimal(12, 2)
   total     Decimal @db.Decimal(12, 2)
 
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  sale        Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product          @relation(fields: [productId], references: [id])
+  returnItems SaleReturnItem[]
 
   @@map("sale_items")
+}
+
+model SaleReturn {
+  id           String           @id @default(uuid())
+  saleId       String           @map("sale_id")
+  type         String           // 'VOID' | 'RETURN'
+  reason       String?
+  refundAmount Decimal          @map("refund_amount") @db.Decimal(12, 2)
+  createdBy    String?          @map("created_by")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  sale  Sale             @relation(fields: [saleId], references: [id])
+  items SaleReturnItem[]
+
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id         String  @id @default(uuid())
+  returnId   String  @map("return_id")
+  saleItemId String  @map("sale_item_id")
+  quantity   Decimal @db.Decimal(12, 4)
+  refund     Decimal @db.Decimal(12, 2)
+
+  saleReturn SaleReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleItem   SaleItem   @relation(fields: [saleItemId], references: [id])
+
+  @@map("sale_return_items")
 }
 
 model SyncQueue {

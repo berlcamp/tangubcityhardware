@@ -40,6 +40,15 @@ export class ReportsController {
     return this.reportsService.paymentBreakdown(from, to);
   }
 
+  @Get('transactions')
+  transactions(
+    @Query('date') date?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.reportsService.transactions({ date, page: Number(page) || 1, limit: Number(limit) || 20 });
+  }
+
   @Get('inventory-movements')
   inventoryMovements(
     @Query('productId') productId?: string,

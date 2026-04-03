@@ -196,6 +196,38 @@ export class ReportsService {
     return Object.values(map);
   }
 
+  async transactions(params: {
+    date?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { date, page = 1, limit = 20 } = params;
+    const where: any = {};
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { gte: start, lte: end };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.sale.findMany({
+        where,
+        include: {
+          items: { include: { product: { select: { name: true } } } },
+          returns: { include: { items: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.sale.count({ where }),
+    ]);
+
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
   async inventoryMovements(params: {
     productId?: string;
     from?: string;

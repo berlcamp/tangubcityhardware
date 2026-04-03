@@ -5,9 +5,14 @@ import {
   Body,
   Param,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
-import { CreateSaleDto } from './sales.dto';
+import { CreateSaleDto, VoidSaleDto, ReturnItemsDto } from './sales.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('sales')
 export class SalesController {
@@ -41,5 +46,19 @@ export class SalesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.salesService.findOne(id);
+  }
+
+  @Post(':id/void')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  voidSale(@Param('id') id: string, @Body() dto: VoidSaleDto) {
+    return this.salesService.voidSale(id, dto);
+  }
+
+  @Post(':id/return')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
+  returnItems(@Param('id') id: string, @Body() dto: ReturnItemsDto) {
+    return this.salesService.returnItems(id, dto);
   }
 }

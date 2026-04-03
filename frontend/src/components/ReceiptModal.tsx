@@ -142,7 +142,7 @@ export function ReceiptModal({ sale, onClose }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="px-6 pb-6 space-y-2">
+        <div className="px-6 pb-6 space-y-2 print:hidden">
           <button
             onClick={handlePrint}
             disabled={printing}
