@@ -176,9 +176,20 @@ export class SalesService {
     return sale;
   }
 
-  async findAll(page = 1, limit = 50) {
+  async findAll(page = 1, limit = 50, cashier?: string, date?: string) {
+    const where: any = {};
+    if (cashier) where.cashier = cashier;
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = { gte: start, lte: end };
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.sale.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -187,9 +198,9 @@ export class SalesService {
           customer: true,
         },
       }),
-      this.prisma.sale.count(),
+      this.prisma.sale.count({ where }),
     ]);
-    return { data, total, page, limit };
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: string) {

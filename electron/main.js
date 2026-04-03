@@ -161,6 +161,7 @@ function createMainWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
     },
     autoHideMenuBar: true,
     show: false,
@@ -179,6 +180,65 @@ function createMainWindow() {
     mainWindow = null;
   });
 }
+
+// ── Receipt printing ──────────────────────────────────────────────────────
+
+ipcMain.handle("get-printers", () => {
+  if (!mainWindow) return [];
+  const printers = mainWindow.webContents.getPrinters();
+  return printers.map((p) => ({ name: p.name, isDefault: p.isDefault }));
+});
+
+ipcMain.handle("print-receipt", async (_event, saleData) => {
+  return new Promise((resolve, reject) => {
+    const printWindow = new BrowserWindow({
+      show: false,
+      width: 226,
+      height: 900,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    const templatePath = path.join(__dirname, "receipt.html");
+    printWindow.loadFile(templatePath);
+
+    const timeout = setTimeout(() => {
+      if (!printWindow.isDestroyed()) printWindow.close();
+      reject(new Error("Print timed out"));
+    }, 10000);
+
+    printWindow.webContents.on("did-finish-load", () => {
+      printWindow.webContents
+        .executeJavaScript(`renderReceipt(${JSON.stringify(saleData)})`)
+        .then(() => {
+          setTimeout(() => {
+            printWindow.webContents.print(
+              {
+                silent: true,
+                deviceName: saleData.printerName || "",
+                printBackground: true,
+                margins: { marginType: "none" },
+                pageSize: { width: 58000, height: 200000 },
+              },
+              (success, failureReason) => {
+                clearTimeout(timeout);
+                if (!printWindow.isDestroyed()) printWindow.close();
+                if (success) resolve({ success: true });
+                else reject(new Error(failureReason || "Print failed"));
+              }
+            );
+          }, 200);
+        })
+        .catch((err) => {
+          clearTimeout(timeout);
+          if (!printWindow.isDestroyed()) printWindow.close();
+          reject(err);
+        });
+    });
+  });
+});
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 

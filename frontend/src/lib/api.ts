@@ -54,8 +54,12 @@ export const api = {
   sales: {
     create: (data: any) =>
       request<any>('/sales', { method: 'POST', body: JSON.stringify(data) }),
-    getAll: (page = 1, limit = 50) =>
-      request<any>(`/sales?page=${page}&limit=${limit}`),
+    getAll: (page = 1, limit = 50, cashier?: string, date?: string) => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (cashier) params.set('cashier', cashier);
+      if (date) params.set('date', date);
+      return request<any>(`/sales?${params}`);
+    },
     getById: (id: string) => request<any>(`/sales/${id}`),
     todaySummary: () => request<any>('/sales/today'),
   },
@@ -109,6 +113,12 @@ export const api = {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       return request<any[]>(`/reports/payment-breakdown?${params}`);
+    },
+    salesByCashier: (from?: string, to?: string) => {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return request<any[]>(`/reports/sales-by-cashier?${params}`);
     },
     inventoryMovements: (productId?: string, from?: string, to?: string, page = 1, limit = 50) => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });

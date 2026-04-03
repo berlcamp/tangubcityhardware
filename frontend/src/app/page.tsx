@@ -121,6 +121,13 @@ export default function POSPage() {
       setCart([]);
       setShowCheckout(false);
       loadTodaySummary();
+
+      // Auto-print receipt if running in Electron
+      if (window.electronPrinter) {
+        window.electronPrinter.printReceipt(sale).catch((err) =>
+          console.error('Auto-print failed:', err)
+        );
+      }
     } catch (err: any) {
       alert(err.message || 'Checkout failed');
     }
@@ -148,7 +155,7 @@ export default function POSPage() {
             onClick={() => setShowHistory(true)}
             className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
           >
-            Sales History
+            Sales Today
           </button>
           {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
             <Link
@@ -207,7 +214,7 @@ export default function POSPage() {
       )}
 
       {showHistory && (
-        <SalesHistory onClose={() => setShowHistory(false)} />
+        <SalesHistory onClose={() => setShowHistory(false)} cashier={user?.name} />
       )}
     </div>
   );

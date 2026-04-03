@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 
 interface Props {
   onClose: () => void;
+  cashier?: string;
 }
 
 const LIMIT = 20;
@@ -15,7 +16,9 @@ const PAYMENT_COLORS: Record<string, string> = {
   card:  'bg-violet-50 text-violet-700 border-violet-200',
 };
 
-export function SalesHistory({ onClose }: Props) {
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+export function SalesHistory({ onClose, cashier }: Props) {
   const [sales, setSales] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -25,7 +28,7 @@ export function SalesHistory({ onClose }: Props) {
   const load = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const res = await api.sales.getAll(p, LIMIT);
+      const res = await api.sales.getAll(p, LIMIT, cashier, todayStr());
       setSales(res.data || res.sales || []);
       setTotal(res.total || 0);
       setTotalPages(res.totalPages || 1);
@@ -33,9 +36,15 @@ export function SalesHistory({ onClose }: Props) {
       // offline
     }
     setLoading(false);
-  }, []);
+  }, [cashier]);
 
   useEffect(() => { load(page); }, [load, page]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   return (
     <div
@@ -50,9 +59,9 @@ export function SalesHistory({ onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100"
              style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Sales History</h2>
+            <h2 className="text-lg font-semibold text-slate-900 tracking-tight">Sales Today</h2>
             {!loading && (
-              <p className="text-xs text-slate-500 mt-0.5">{total} transaction{total !== 1 ? 's' : ''} total</p>
+              <p className="text-xs text-slate-500 mt-0.5">{total} transaction{total !== 1 ? 's' : ''} today</p>
             )}
           </div>
           <button

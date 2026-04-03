@@ -134,6 +134,40 @@ export class ReportsService {
       .slice(0, limit);
   }
 
+  async salesByCashier(from?: string, to?: string) {
+    const where: any = {};
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
+    const sales = await this.prisma.sale.findMany({
+      where,
+      select: { cashier: true, total: true, discount: true },
+    });
+
+    const map: Record<string, { cashier: string; transactions: number; revenue: number; discount: number }> = {};
+    for (const s of sales) {
+      const key = s.cashier || 'Unknown';
+      if (!map[key]) map[key] = { cashier: key, transactions: 0, revenue: 0, discount: 0 };
+      map[key].transactions++;
+      map[key].revenue = Number((map[key].revenue + Number(s.total)).toFixed(2));
+      map[key].discount = Number((map[key].discount + Number(s.discount)).toFixed(2));
+    }
+
+    return Object.values(map)
+      .map(c => ({
+        ...c,
+        avgTransaction: c.transactions > 0 ? Number((c.revenue / c.transactions).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }
+
   async paymentBreakdown(from?: string, to?: string) {
     const where: any = {};
     if (from || to) {

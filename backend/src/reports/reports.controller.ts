@@ -30,6 +30,11 @@ export class ReportsController {
     return this.reportsService.topProducts(limit ? Number(limit) : 10, from, to);
   }
 
+  @Get('sales-by-cashier')
+  salesByCashier(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.reportsService.salesByCashier(from, to);
+  }
+
   @Get('payment-breakdown')
   paymentBreakdown(@Query('from') from?: string, @Query('to') to?: string) {
     return this.reportsService.paymentBreakdown(from, to);

@@ -19,8 +19,13 @@ export class SalesController {
   }
 
   @Get()
-  findAll(@Query('page') page?: number, @Query('limit') limit?: number) {
-    return this.salesService.findAll(page ?? 1, limit ?? 50);
+  findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('cashier') cashier?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.salesService.findAll(page ?? 1, limit ?? 50, cashier, date);
   }
 
   @Get('today')

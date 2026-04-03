@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: 58mm auto;
+      margin: 0;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      width: 48mm;
+      margin: 0 auto;
+      padding: 3mm 0;
+      color: #000;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .separator {
+      border: none;
+      border-top: 1px dashed #000;
+      margin: 4px 0;
+    }
+    .double-separator {
+      border: none;
+      border-top: 2px solid #000;
+      margin: 4px 0;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .item-name {
+      margin-top: 2px;
+      word-wrap: break-word;
+    }
+    .item-detail {
+      display: flex;
+      justify-content: space-between;
+      padding-left: 8px;
+      font-size: 11px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 2px 0;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="receipt"></div>
+  <script>
+    function renderReceipt(sale) {
+      const formatNum = (n) => Number(n).toFixed(2);
+      const formatDate = (d) => new Date(d).toLocaleString('en-PH', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+
+      let html = '';
+
+      // Header
+      html += '<hr class="double-separator">';
+      html += '<div class="center bold" style="font-size:14px">TANGUB CITY</div>';
+      html += '<div class="center bold" style="font-size:14px">HARDWARE</div>';
+      html += '<div class="center" style="font-size:11px;margin-top:2px">Official Receipt</div>';
+      html += '<hr class="double-separator">';
+
+      // Receipt info
+      html += '<div class="row"><span>Receipt #:</span><span>' + sale.receiptNumber + '</span></div>';
+      html += '<div class="row"><span>Date:</span><span>' + formatDate(sale.createdAt) + '</span></div>';
+      if (sale.cashier || sale.userName) {
+        html += '<div class="row"><span>Cashier:</span><span>' + (sale.cashier || sale.userName) + '</span></div>';
+      }
+      if (sale.terminalId) {
+        html += '<div class="row"><span>Terminal:</span><span>' + sale.terminalId + '</span></div>';
+      }
+
+      html += '<hr class="separator">';
+
+      // Items
+      if (sale.items && sale.items.length > 0) {
+        sale.items.forEach(function(item) {
+          var name = (item.product && item.product.name) || item.productName || item.productId;
+          html += '<div class="item-name bold">' + name + '</div>';
+          html += '<div class="item-detail">';
+          html += '<span>' + Number(item.quantity) + ' x ' + item.unitName + ' @ ' + formatNum(item.price) + '</span>';
+          html += '<span>' + formatNum(item.total) + '</span>';
+          html += '</div>';
+        });
+      }
+
+      html += '<hr class="separator">';
+
+      // Totals
+      html += '<div class="row"><span>Subtotal</span><span>' + formatNum(sale.subtotal) + '</span></div>';
+      if (Number(sale.discount) > 0) {
+        html += '<div class="row"><span>Discount</span><span>-' + formatNum(sale.discount) + '</span></div>';
+      }
+      html += '<div class="total-row"><span>TOTAL</span><span>PHP ' + formatNum(sale.total) + '</span></div>';
+
+      html += '<hr class="separator">';
+
+      // Payment
+      var method = (sale.paymentMethod || 'cash').charAt(0).toUpperCase() + (sale.paymentMethod || 'cash').slice(1);
+      html += '<div class="row"><span>Payment</span><span>' + method + '</span></div>';
+      html += '<div class="row"><span>Paid</span><span>' + formatNum(sale.amountPaid) + '</span></div>';
+      html += '<div class="row bold"><span>Change</span><span>PHP ' + formatNum(sale.change) + '</span></div>';
+
+      html += '<hr class="double-separator">';
+
+      // Footer
+      html += '<div class="footer">Thank you for your<br>purchase!</div>';
+      html += '<hr class="double-separator">';
+
+      // Extra spacing at bottom for paper cutter
+      html += '<div style="height:10mm"></div>';
+
+      document.getElementById('receipt').innerHTML = html;
+    }
+  </script>
+</body>
+</html>

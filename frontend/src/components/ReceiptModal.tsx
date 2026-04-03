@@ -1,11 +1,47 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
+declare global {
+  interface Window {
+    electronPrinter?: {
+      getPrinters: () => Promise<{ name: string; isDefault: boolean }[]>;
+      printReceipt: (sale: any) => Promise<{ success: boolean }>;
+    };
+  }
+}
+
 interface Props {
   sale: any;
   onClose: () => void;
 }
 
 export function ReceiptModal({ sale, onClose }: Props) {
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const handlePrint = async () => {
+    if (!window.electronPrinter) {
+      window.print();
+      return;
+    }
+    setPrinting(true);
+    setPrintError(null);
+    try {
+      await window.electronPrinter.printReceipt(sale);
+    } catch (err: any) {
+      setPrintError(err.message || 'Print failed');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <div
       className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -105,8 +141,23 @@ export function ReceiptModal({ sale, onClose }: Props) {
           </p>
         </div>
 
-        {/* Action */}
-        <div className="px-6 pb-6">
+        {/* Actions */}
+        <div className="px-6 pb-6 space-y-2">
+          <button
+            onClick={handlePrint}
+            disabled={printing}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white rounded-xl font-bold text-sm tracking-wide transition-colors flex items-center justify-center gap-2"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            {printing ? 'Printing...' : 'Print Receipt'}
+          </button>
+          {printError && (
+            <p className="text-red-500 text-xs text-center">{printError}</p>
+          )}
           <button
             onClick={onClose}
             className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold text-sm tracking-wide transition-colors shadow-sm shadow-blue-200"

@@ -27,6 +27,7 @@
       "main.js",
       "preload.js",
       "setup.html",
+      "receipt.html",
       "assets/**/*"
     ],
     "extraResources": [

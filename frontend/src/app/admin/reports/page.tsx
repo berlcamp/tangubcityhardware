@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 const today = new Date().toISOString().split('T')[0];
 const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-type Tab = 'sales' | 'products' | 'inventory';
+type Tab = 'sales' | 'products' | 'inventory' | 'cashier';
 
 export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('sales');
@@ -18,6 +18,7 @@ export default function ReportsPage() {
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsTotal, setMovementsTotal] = useState(0);
   const [movPage, setMovPage] = useState(1);
+  const [cashierData, setCashierData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const loadSalesData = useCallback(async () => {
@@ -56,11 +57,22 @@ export default function ReportsPage() {
     }
   }, [from, to, movPage]);
 
+  const loadCashierData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.reports.salesByCashier(from, to);
+      setCashierData(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [from, to]);
+
   useEffect(() => {
     if (tab === 'sales') loadSalesData();
     else if (tab === 'products') loadProductsData();
+    else if (tab === 'cashier') loadCashierData();
     else loadInventoryData();
-  }, [tab, from, to, loadSalesData, loadProductsData, loadInventoryData]);
+  }, [tab, from, to, loadSalesData, loadProductsData, loadInventoryData, loadCashierData]);
 
   const formatPHP = (v: number) => v.toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -105,7 +117,7 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 w-fit">
-        {[['sales', 'Sales'], ['products', 'Top Products'], ['inventory', 'Inventory Movements']].map(([key, label]) => (
+        {[['sales', 'Sales'], ['products', 'Top Products'], ['cashier', 'By Cashier'], ['inventory', 'Inventory Movements']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as Tab)}
             className={`px-4 py-2 text-sm rounded-md transition ${tab === key ? 'bg-white shadow font-medium text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
@@ -209,6 +221,50 @@ export default function ReportsPage() {
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No sales data in this period</td></tr>
               )}
             </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* By Cashier Tab */}
+      {!loading && tab === 'cashier' && (
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b text-gray-600">
+              <tr>
+                <th className="px-4 py-3 text-left w-8">#</th>
+                <th className="px-4 py-3 text-left">Cashier</th>
+                <th className="px-4 py-3 text-right">Transactions</th>
+                <th className="px-4 py-3 text-right">Total Revenue</th>
+                <th className="px-4 py-3 text-right">Total Discounts</th>
+                <th className="px-4 py-3 text-right">Avg per Transaction</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashierData.map((row: any, i: number) => (
+                <tr key={row.cashier} className="border-b last:border-0 hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-400">{i + 1}</td>
+                  <td className="px-4 py-3 font-medium">{row.cashier}</td>
+                  <td className="px-4 py-3 text-right">{row.transactions}</td>
+                  <td className="px-4 py-3 text-right font-medium text-green-700">₱{formatPHP(row.revenue)}</td>
+                  <td className="px-4 py-3 text-right text-red-500">₱{formatPHP(row.discount)}</td>
+                  <td className="px-4 py-3 text-right text-gray-600">₱{formatPHP(row.avgTransaction)}</td>
+                </tr>
+              ))}
+              {cashierData.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No sales data in this period</td></tr>
+              )}
+            </tbody>
+            {cashierData.length > 0 && (
+              <tfoot className="border-t bg-gray-50">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                  <td className="px-4 py-3 text-right font-semibold">{cashierData.reduce((s, r) => s + r.transactions, 0)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-green-700">₱{formatPHP(cashierData.reduce((s, r) => s + r.revenue, 0))}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-500">₱{formatPHP(cashierData.reduce((s, r) => s + r.discount, 0))}</td>
+                  <td className="px-4 py-3"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
