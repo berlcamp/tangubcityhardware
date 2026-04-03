@@ -1,0 +1,166 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Injectable()
+export class ReportsService {
+  constructor(private prisma: PrismaService) {}
+
+  async salesByDay(days = 30) {
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+
+    const sales = await this.prisma.sale.findMany({
+      where: { createdAt: { gte: from } },
+      select: { createdAt: true, total: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const map: Record<string, { date: string; count: number; revenue: number }> = {};
+    for (const sale of sales) {
+      const date = sale.createdAt.toISOString().split('T')[0];
+      if (!map[date]) map[date] = { date, count: 0, revenue: 0 };
+      map[date].count++;
+      map[date].revenue = Number((map[date].revenue + Number(sale.total)).toFixed(2));
+    }
+
+    // Fill in missing days with 0
+    const result: { date: string; count: number; revenue: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const date = d.toISOString().split('T')[0];
+      result.push(map[date] || { date, count: 0, revenue: 0 });
+    }
+    return result;
+  }
+
+  async salesSummary(from?: string, to?: string) {
+    const where: any = {};
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
+    const sales = await this.prisma.sale.findMany({
+      where,
+      select: { total: true, discount: true, paymentMethod: true },
+    });
+
+    const totalTransactions = sales.length;
+    const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
+    const totalDiscount = sales.reduce((s, x) => s + Number(x.discount), 0);
+    const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+    const paymentCounts: Record<string, number> = {};
+    for (const s of sales) {
+      paymentCounts[s.paymentMethod] = (paymentCounts[s.paymentMethod] || 0) + 1;
+    }
+
+    return {
+      totalTransactions,
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      totalDiscount: Number(totalDiscount.toFixed(2)),
+      avgTransaction: Number(avgTransaction.toFixed(2)),
+      paymentCounts,
+    };
+  }
+
+  async topProducts(limit = 10, from?: string, to?: string) {
+    const where: any = {};
+    if (from || to) {
+      where.sale = { createdAt: {} };
+      if (from) where.sale.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.sale.createdAt.lte = toDate;
+      }
+    }
+
+    const items = await this.prisma.saleItem.findMany({
+      where,
+      include: { product: { select: { id: true, name: true, sku: true } } },
+    });
+
+    const map: Record<string, { productId: string; name: string; sku: string; totalQty: number; totalRevenue: number }> = {};
+    for (const item of items) {
+      const key = item.productId;
+      if (!map[key]) {
+        map[key] = { productId: key, name: item.product.name, sku: item.product.sku, totalQty: 0, totalRevenue: 0 };
+      }
+      map[key].totalQty = Number((map[key].totalQty + Number(item.quantity)).toFixed(4));
+      map[key].totalRevenue = Number((map[key].totalRevenue + Number(item.total)).toFixed(2));
+    }
+
+    return Object.values(map)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, limit);
+  }
+
+  async paymentBreakdown(from?: string, to?: string) {
+    const where: any = {};
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
+    const sales = await this.prisma.sale.findMany({
+      where,
+      select: { paymentMethod: true, total: true },
+    });
+
+    const map: Record<string, { method: string; count: number; revenue: number }> = {};
+    for (const s of sales) {
+      const m = s.paymentMethod;
+      if (!map[m]) map[m] = { method: m, count: 0, revenue: 0 };
+      map[m].count++;
+      map[m].revenue = Number((map[m].revenue + Number(s.total)).toFixed(2));
+    }
+
+    return Object.values(map);
+  }
+
+  async inventoryMovements(params: {
+    productId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { productId, from, to, page = 1, limit = 50 } = params;
+    const where: any = {};
+    if (productId) where.productId = productId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.inventoryMovement.findMany({
+        where,
+        include: { product: { select: { name: true, sku: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.inventoryMovement.count({ where }),
+    ]);
+
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+}

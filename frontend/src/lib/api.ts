@@ -1,0 +1,126 @@
+import { auth } from './auth';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = auth.getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    auth.logout();
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || 'Request failed');
+  }
+
+  return res.json();
+}
+
+export const api = {
+  auth: {
+    login: (username: string, password: string) =>
+      request<{ access_token: string; user: any }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }),
+  },
+  products: {
+    search: (query: string) =>
+      request<any[]>(`/products?search=${encodeURIComponent(query)}`),
+    getAll: (page = 1, limit = 20, search?: string) => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (search) params.set('search', search);
+      return request<any>(`/products?${params}`);
+    },
+    create: (data: any) =>
+      request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) =>
+      request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) =>
+      request<any>(`/products/${id}`, { method: 'DELETE' }),
+  },
+  sales: {
+    create: (data: any) =>
+      request<any>('/sales', { method: 'POST', body: JSON.stringify(data) }),
+    getAll: (page = 1, limit = 50) =>
+      request<any>(`/sales?page=${page}&limit=${limit}`),
+    getById: (id: string) => request<any>(`/sales/${id}`),
+    todaySummary: () => request<any>('/sales/today'),
+  },
+  inventory: {
+    getAll: (page = 1, limit = 20, search?: string) => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (search) params.set('search', search);
+      return request<any>(`/inventory?${params}`);
+    },
+    getLowStock: () => request<any[]>('/inventory/low-stock'),
+    adjust: (productId: string, quantity: number, reason?: string) =>
+      request<any>(`/inventory/${productId}/adjust`, {
+        method: 'POST',
+        body: JSON.stringify({ quantity, reason }),
+      }),
+  },
+  users: {
+    getAll: (page = 1, limit = 20) =>
+      request<any>(`/users?page=${page}&limit=${limit}`),
+    create: (data: any) =>
+      request<any>('/users', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: any) =>
+      request<any>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) =>
+      request<any>(`/users/${id}`, { method: 'DELETE' }),
+  },
+  reports: {
+    salesByDay: (days = 30) =>
+      request<any[]>(`/reports/sales-by-day?days=${days}`),
+    salesSummary: (from?: string, to?: string) => {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return request<any>(`/reports/sales-summary?${params}`);
+    },
+    topProducts: (limit = 10, from?: string, to?: string) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return request<any[]>(`/reports/top-products?${params}`);
+    },
+    paymentBreakdown: (from?: string, to?: string) => {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return request<any[]>(`/reports/payment-breakdown?${params}`);
+    },
+    inventoryMovements: (productId?: string, from?: string, to?: string, page = 1, limit = 50) => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (productId) params.set('productId', productId);
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return request<any>(`/reports/inventory-movements?${params}`);
+    },
+  },
+  audit: {
+    getAll: (page = 1, limit = 50, filters?: { action?: string; userId?: string; from?: string; to?: string }) => {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      if (filters?.action) params.set('action', filters.action);
+      if (filters?.userId) params.set('userId', filters.userId);
+      if (filters?.from) params.set('from', filters.from);
+      if (filters?.to) params.set('to', filters.to);
+      return request<any>(`/audit-logs?${params}`);
+    },
+  },
+  sync: {
+    status: () => request<any>('/sync/status'),
+    retry: () => request<any>('/sync/retry', { method: 'POST' }),
+  },
+};

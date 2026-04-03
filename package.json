@@ -1,0 +1,29 @@
+{
+  "name": "tangub-city-hardware-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first POS system for Tangub City Hardware",
+  "scripts": {
+    "backend:install": "cd backend && npm install",
+    "frontend:install": "cd frontend && npm install",
+    "electron:install": "cd electron && npm install",
+    "install:all": "npm run backend:install && npm run frontend:install && npm run electron:install",
+    "backend:dev": "cd backend && npm run start:dev",
+    "frontend:dev": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "dev:all": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\" \"wait-on http://localhost:3000 && npm run electron:dev\"",
+    "db:generate": "cd backend && npx prisma generate",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:seed": "cd backend && npx prisma db seed",
+    "electron:dev": "cd electron && npm run dev",
+    "build:all": "npm run frontend:build && npm run backend:build",
+    "frontend:build": "cd frontend && npm run build",
+    "backend:build": "cd backend && npm run build",
+    "electron:build:win": "npm run build:all && cd electron && npm run build:win",
+    "electron:publish:win": "npm run build:all && cd electron && npm run publish:win"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^8.0.5"
+  }
+}
