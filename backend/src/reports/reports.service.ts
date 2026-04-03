@@ -35,24 +35,30 @@ export class ReportsService {
   }
 
   async salesSummary(from?: string, to?: string) {
-    const where: any = {};
+    const where: any = { isVoided: false };
     const itemWhere: any = {};
+    const returnWhere: any = {};
     if (from || to) {
       where.createdAt = {};
-      itemWhere.sale = { createdAt: {} };
+      itemWhere.sale = { createdAt: {}, isVoided: false };
+      returnWhere.createdAt = {};
       if (from) {
         where.createdAt.gte = new Date(from);
         itemWhere.sale.createdAt.gte = new Date(from);
+        returnWhere.createdAt.gte = new Date(from);
       }
       if (to) {
         const toDate = new Date(to);
         toDate.setHours(23, 59, 59, 999);
         where.createdAt.lte = toDate;
         itemWhere.sale.createdAt.lte = toDate;
+        returnWhere.createdAt.lte = toDate;
       }
+    } else {
+      itemWhere.sale = { isVoided: false };
     }
 
-    const [sales, items] = await Promise.all([
+    const [sales, items, saleReturns] = await Promise.all([
       this.prisma.sale.findMany({
         where,
         select: { total: true, discount: true, paymentMethod: true },
@@ -61,10 +67,16 @@ export class ReportsService {
         where: itemWhere,
         select: { total: true, costPrice: true, quantity: true },
       }),
+      this.prisma.saleReturn.findMany({
+        where: returnWhere,
+        select: { refundAmount: true },
+      }),
     ]);
 
     const totalTransactions = sales.length;
-    const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
+    const grossRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
+    const totalRefunds = saleReturns.reduce((s, x) => s + Number(x.refundAmount), 0);
+    const totalRevenue = grossRevenue - totalRefunds;
     const totalDiscount = sales.reduce((s, x) => s + Number(x.discount), 0);
     const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
     const totalCost = items.reduce((s, x) => s + Number(x.costPrice) * Number(x.quantity), 0);
@@ -79,6 +91,7 @@ export class ReportsService {
     return {
       totalTransactions,
       totalRevenue: Number(totalRevenue.toFixed(2)),
+      totalRefunds: Number(totalRefunds.toFixed(2)),
       totalDiscount: Number(totalDiscount.toFixed(2)),
       avgTransaction: Number(avgTransaction.toFixed(2)),
       totalCost: Number(totalCost.toFixed(2)),

@@ -424,22 +424,28 @@ export class SalesService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [salesCount, items] = await Promise.all([
-      this.prisma.sale.count({ where: { createdAt: { gte: today } } }),
+    const [salesCount, items, returns] = await Promise.all([
+      this.prisma.sale.count({ where: { createdAt: { gte: today }, isVoided: false } }),
       this.prisma.saleItem.findMany({
-        where: { sale: { createdAt: { gte: today } } },
+        where: { sale: { createdAt: { gte: today }, isVoided: false } },
         select: { total: true, costPrice: true, quantity: true },
+      }),
+      this.prisma.saleReturn.findMany({
+        where: { createdAt: { gte: today } },
+        select: { refundAmount: true },
       }),
     ]);
 
     const totalRevenue = items.reduce((s, x) => s + Number(x.total), 0);
     const totalCost = items.reduce((s, x) => s + Number(x.costPrice) * Number(x.quantity), 0);
+    const totalRefunds = returns.reduce((s, x) => s + Number(x.refundAmount), 0);
+    const netRevenue = totalRevenue - totalRefunds;
 
     return {
       totalSales: salesCount,
-      totalRevenue: totalRevenue.toFixed(2),
+      totalRevenue: netRevenue.toFixed(2),
       totalCost: totalCost.toFixed(2),
-      totalProfit: (totalRevenue - totalCost).toFixed(2),
+      totalProfit: (netRevenue - totalCost).toFixed(2),
     };
   }
 }

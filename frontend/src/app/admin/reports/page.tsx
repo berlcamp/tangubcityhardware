@@ -125,12 +125,29 @@ export default function ReportsPage() {
     setReturning(true);
     setReturnError(null);
     try {
-      await api.sales.returnItems(returnModal.sale.id, {
+      const result = await api.sales.returnItems(returnModal.sale.id, {
         items,
         reason: returnReason || undefined,
         userId: user?.id,
         userName: user?.name,
       });
+
+      // Auto-print refund receipt
+      if (window.electronPrinter) {
+        window.electronPrinter.printReceipt({
+          isRefund: true,
+          receiptNumber: returnModal.sale.receiptNumber,
+          refundAmount: result.refundAmount,
+          reason: returnReason || undefined,
+          cashier: user?.name,
+          createdAt: new Date().toISOString(),
+          items: items.map(({ saleItemId, quantity }) => {
+            const si = returnModal.sale.items?.find((i: any) => i.id === saleItemId);
+            return { product: si?.product, unitName: si?.unitName, quantity, total: (quantity / Number(si?.quantity)) * Number(si?.total) };
+          }),
+        }).catch(console.error);
+      }
+
       setReturnModal(null);
       loadTransactionsData();
     } catch (err: any) {
@@ -251,6 +268,13 @@ export default function ReportsPage() {
                 <div className="text-xs text-gray-500 uppercase tracking-wide">Total Discounts</div>
                 <div className="text-3xl font-bold text-red-500 mt-1">₱{formatPHP(summary.totalDiscount ?? 0)}</div>
               </div>
+              {(summary.totalRefunds ?? 0) > 0 && (
+                <div className="bg-white rounded-xl border border-orange-200 p-5 shadow-sm">
+                  <div className="text-xs text-orange-500 uppercase tracking-wide">Total Refunds</div>
+                  <div className="text-3xl font-bold text-orange-600 mt-1">₱{formatPHP(summary.totalRefunds ?? 0)}</div>
+                  <div className="text-xs text-gray-400 mt-1">already deducted from revenue</div>
+                </div>
+              )}
             </div>
           )}
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -341,7 +365,14 @@ export default function ReportsPage() {
                   <tr key={txn.id} className={`border-b last:border-0 hover:bg-gray-50 ${txn.isVoided ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-2 font-mono text-xs text-blue-700 font-medium">
                       {txn.receiptNumber}
-                      {txn.isVoided && <span className="ml-1 px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs">VOIDED</span>}
+                      {txn.isVoided && <span className="ml-1 px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs font-sans">VOIDED</span>}
+                      {!txn.isVoided && txn.returns?.length > 0 && (() => {
+                        const refunded = txn.returns.reduce((s: number, r: any) => s + Number(r.refundAmount), 0);
+                        const isFull = refunded >= Number(txn.total);
+                        return <span className={`ml-1 px-1 py-0.5 rounded text-xs font-sans ${isFull ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                          {isFull ? 'RETURNED' : 'PARTIAL RETURN'}
+                        </span>;
+                      })()}
                     </td>
                     <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
                       {new Date(txn.createdAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
