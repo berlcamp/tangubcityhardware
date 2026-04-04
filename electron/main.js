@@ -212,7 +212,16 @@ ipcMain.handle("print-receipt", async (_event, saleData) => {
     printWindow.webContents.on("did-finish-load", () => {
       printWindow.webContents
         .executeJavaScript(`renderReceipt(${JSON.stringify(saleData)})`)
-        .then(() => {
+        .then(() =>
+          // Measure actual content height so we don't feed blank paper
+          printWindow.webContents.executeJavaScript(
+            "document.documentElement.scrollHeight"
+          )
+        )
+        .then((contentHeightPx) => {
+          // 96 DPI → 1 px ≈ 264.58 µm; add 10 mm bottom buffer for paper cutter
+          const heightMicrons =
+            Math.ceil(contentHeightPx * 264.58) + 10000;
           setTimeout(() => {
             printWindow.webContents.print(
               {
@@ -220,7 +229,10 @@ ipcMain.handle("print-receipt", async (_event, saleData) => {
                 deviceName: saleData.printerName || "",
                 printBackground: true,
                 margins: { marginType: "none" },
-                pageSize: { width: 58000, height: 200000 },
+                pageSize: {
+                  width: 58000,
+                  height: Math.max(heightMicrons, 50000),
+                },
               },
               (success, failureReason) => {
                 clearTimeout(timeout);
@@ -229,7 +241,7 @@ ipcMain.handle("print-receipt", async (_event, saleData) => {
                 else reject(new Error(failureReason || "Print failed"));
               }
             );
-          }, 200);
+          }, 300);
         })
         .catch((err) => {
           clearTimeout(timeout);

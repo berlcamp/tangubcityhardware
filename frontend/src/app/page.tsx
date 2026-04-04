@@ -121,13 +121,6 @@ export default function POSPage() {
       setCart([]);
       setShowCheckout(false);
       loadTodaySummary();
-
-      // Auto-print receipt if running in Electron
-      if (window.electronPrinter) {
-        window.electronPrinter.printReceipt(sale).catch((err) =>
-          console.error('Auto-print failed:', err)
-        );
-      }
     } catch (err: any) {
       alert(err.message || 'Checkout failed');
     }

@@ -19,12 +19,37 @@ interface Props {
 export function ReceiptModal({ sale, onClose }: Props) {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [printers, setPrinters] = useState<{ name: string; isDefault: boolean }[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('receiptPrinter') || '';
+    return '';
+  });
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!window.electronPrinter) return;
+    window.electronPrinter.getPrinters().then((list) => {
+      setPrinters(list);
+      // Pre-select saved printer or default
+      const saved = localStorage.getItem('receiptPrinter');
+      if (saved && list.some((p) => p.name === saved)) {
+        setSelectedPrinter(saved);
+      } else {
+        const def = list.find((p) => p.isDefault);
+        if (def) setSelectedPrinter(def.name);
+      }
+    });
+  }, []);
+
+  const handlePrinterChange = (name: string) => {
+    setSelectedPrinter(name);
+    localStorage.setItem('receiptPrinter', name);
+  };
 
   const handlePrint = async () => {
     if (!window.electronPrinter) {
@@ -34,7 +59,7 @@ export function ReceiptModal({ sale, onClose }: Props) {
     setPrinting(true);
     setPrintError(null);
     try {
-      await window.electronPrinter.printReceipt(sale);
+      await window.electronPrinter.printReceipt({ ...sale, printerName: selectedPrinter });
     } catch (err: any) {
       setPrintError(err.message || 'Print failed');
     } finally {
@@ -143,6 +168,20 @@ export function ReceiptModal({ sale, onClose }: Props) {
 
         {/* Actions */}
         <div className="px-6 pb-6 space-y-2 print:hidden">
+          {printers.length > 0 && (
+            <select
+              value={selectedPrinter}
+              onChange={(e) => handlePrinterChange(e.target.value)}
+              className="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:border-blue-400"
+            >
+              <option value="">Default printer</option>
+              {printers.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}{p.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={handlePrint}
             disabled={printing}

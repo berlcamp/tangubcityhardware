@@ -35,6 +35,9 @@ export default function ReportsPage() {
   const [returnReason, setReturnReason] = useState('');
   const [returning, setReturning] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
+  const [pendingRefund, setPendingRefund] = useState<any>(null);
+  const [printingRefund, setPrintingRefund] = useState(false);
+  const [refundPrintError, setRefundPrintError] = useState<string | null>(null);
 
   const user = auth.getUser();
 
@@ -132,28 +135,40 @@ export default function ReportsPage() {
         userName: user?.name,
       });
 
-      // Auto-print refund receipt
-      if (window.electronPrinter) {
-        window.electronPrinter.printReceipt({
-          isRefund: true,
-          receiptNumber: returnModal.sale.receiptNumber,
-          refundAmount: result.refundAmount,
-          reason: returnReason || undefined,
-          cashier: user?.name,
-          createdAt: new Date().toISOString(),
-          items: items.map(({ saleItemId, quantity }) => {
-            const si = returnModal.sale.items?.find((i: any) => i.id === saleItemId);
-            return { product: si?.product, unitName: si?.unitName, quantity, total: (quantity / Number(si?.quantity)) * Number(si?.total) };
-          }),
-        }).catch(console.error);
-      }
+      const refundData = {
+        isRefund: true,
+        receiptNumber: returnModal.sale.receiptNumber,
+        refundAmount: result.refundAmount,
+        reason: returnReason || undefined,
+        cashier: user?.name,
+        createdAt: new Date().toISOString(),
+        items: items.map(({ saleItemId, quantity }) => {
+          const si = returnModal.sale.items?.find((i: any) => i.id === saleItemId);
+          return { product: si?.product, unitName: si?.unitName, quantity, total: (quantity / Number(si?.quantity)) * Number(si?.total) };
+        }),
+      };
 
       setReturnModal(null);
+      setPendingRefund(refundData);
       loadTransactionsData();
     } catch (err: any) {
       setReturnError(err.message || 'Return failed');
     } finally {
       setReturning(false);
+    }
+  };
+
+  const handlePrintRefund = async () => {
+    if (!window.electronPrinter || !pendingRefund) return;
+    setPrintingRefund(true);
+    setRefundPrintError(null);
+    try {
+      const printerName = localStorage.getItem('receiptPrinter') || '';
+      await window.electronPrinter.printReceipt({ ...pendingRefund, printerName });
+    } catch (err: any) {
+      setRefundPrintError(err.message || 'Print failed');
+    } finally {
+      setPrintingRefund(false);
     }
   };
 
@@ -682,6 +697,52 @@ export default function ReportsPage() {
                 className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold text-sm transition-colors"
               >
                 {returning ? 'Processing...' : `Issue Refund ₱${formatPHP(returnRefundTotal)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Processed — print confirmation */}
+      {pendingRefund && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ backgroundColor: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+               style={{ boxShadow: '0 25px 60px -12px rgba(15,23,42,0.35)' }}>
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <h3 className="font-bold text-gray-900 text-lg">Refund Processed</h3>
+              <p className="text-gray-500 text-sm mt-1">
+                ₱{formatPHP(pendingRefund.refundAmount)} issued for receipt {pendingRefund.receiptNumber}
+              </p>
+            </div>
+            <div className="px-6 pb-6 space-y-2">
+              {window.electronPrinter && (
+                <>
+                  <button
+                    onClick={handlePrintRefund}
+                    disabled={printingRefund}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 6 2 18 2 18 9"/>
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                      <rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                    {printingRefund ? 'Printing...' : 'Print Refund Receipt'}
+                  </button>
+                  {refundPrintError && <p className="text-red-500 text-xs text-center">{refundPrintError}</p>}
+                </>
+              )}
+              <button
+                onClick={() => { setPendingRefund(null); setRefundPrintError(null); }}
+                className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold text-sm transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>
