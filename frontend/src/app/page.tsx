@@ -151,7 +151,7 @@ export default function POSPage() {
             onClick={() => setShowHistory(true)}
             className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
           >
-            Today&apos;s Sales
+            Today Sales
           </button>
           {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
             <Link

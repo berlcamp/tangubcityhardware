@@ -1,6 +1,6 @@
 {
   "name": "tangub-city-hardware-electron",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Tangub City Hardware POS — offline-first Point of Sale system",
   "author": {
