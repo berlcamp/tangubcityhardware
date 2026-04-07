@@ -1,16 +1,15 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, utilityProcess } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const log = require("electron-log");
 const path = require("path");
 const fs = require("fs");
-const { spawn } = require("child_process");
 const http = require("http");
 
 const isDev = process.env.NODE_ENV === "development";
 
 const FRONTEND_PORT = 3000;
 const BACKEND_PORT = 3001;
-const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
+const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 
 let mainWindow;
 let setupWindow;
@@ -63,16 +62,21 @@ function waitForServer(url, timeoutMs = 60000) {
   });
 }
 
-// ELECTRON_RUN_AS_NODE=1 makes the Electron binary behave as plain Node.js
+// utilityProcess.fork spawns a real Node.js child from Electron that works
+// with hardened runtime / code signing on macOS. Unlike spawn(process.execPath),
+// it does NOT require ELECTRON_RUN_AS_NODE entitlements.
 function spawnNode(scriptPath, env) {
-  const proc = spawn(process.execPath, [scriptPath], {
-    env: { ...process.env, ...env, ELECTRON_RUN_AS_NODE: "1" },
+  const name = path.basename(path.dirname(scriptPath)) + "/" + path.basename(scriptPath);
+  const proc = utilityProcess.fork(scriptPath, [], {
+    env: { ...process.env, ...env },
     stdio: "pipe",
+    cwd: path.dirname(scriptPath),
+    serviceName: name,
   });
-  const name = path.basename(scriptPath);
-  proc.stdout.on("data", (d) => log.info(`[${name}]`, d.toString().trim()));
-  proc.stderr.on("data", (d) => log.warn(`[${name}]`, d.toString().trim()));
+  if (proc.stdout) proc.stdout.on("data", (d) => log.info(`[${name}]`, d.toString().trim()));
+  if (proc.stderr) proc.stderr.on("data", (d) => log.warn(`[${name}]`, d.toString().trim()));
   proc.on("exit", (code) => log.info(`[${name}] exited`, code));
+  proc.on("spawn", () => log.info(`[${name}] spawned pid=${proc.pid}`));
   return proc;
 }
 
@@ -115,7 +119,7 @@ async function startServers(serverIp) {
 
 // ── Setup window (first run) ───────────────────────────────────────────────────
 
-function openSetupWindow() {
+function openSetupWindow(savedIp) {
   return new Promise((resolve) => {
     setupWindow = new BrowserWindow({
       width: 520,
@@ -129,6 +133,8 @@ function openSetupWindow() {
         nodeIntegration: false,
       },
     });
+
+    ipcMain.handleOnce("setup-get-saved-ip", () => savedIp || "");
 
     setupWindow.loadFile(path.join(__dirname, "setup.html"));
 
@@ -275,10 +281,9 @@ app.whenReady().then(async () => {
     return;
   }
 
-  config = readConfig();
-  if (!config) {
-    config = await openSetupWindow();
-  }
+  // Always show setup window, pre-filled with saved IP (if any)
+  const savedConfig = readConfig();
+  config = await openSetupWindow(savedConfig?.serverIp);
 
   log.info("Config:", config);
 

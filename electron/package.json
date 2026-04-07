@@ -1,7 +1,12 @@
 {
   "name": "tangub-city-hardware-electron",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
+  "description": "Tangub City Hardware POS — offline-first Point of Sale system",
+  "author": {
+    "name": "Berl Camp",
+    "email": "berlcamp@users.noreply.github.com"
+  },
   "main": "main.js",
   "scripts": {
     "dev": "NODE_ENV=development electron .",
@@ -80,7 +85,11 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
     },
     "publish": {
       "provider": "github",

@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { api } from '@/lib/api';
-import { auth } from '@/lib/auth';
-import { Product, CartItem } from '@/lib/types';
-import { ProductSearch } from '@/components/ProductSearch';
-import { Cart } from '@/components/Cart';
-import { CheckoutModal } from '@/components/CheckoutModal';
-import { ReceiptModal } from '@/components/ReceiptModal';
-import { SalesHistory } from '@/components/SalesHistory';
+import { Cart } from "@/components/Cart";
+import { CheckoutModal } from "@/components/CheckoutModal";
+import { ProductSearch } from "@/components/ProductSearch";
+import { ReceiptModal } from "@/components/ReceiptModal";
+import { SalesHistory } from "@/components/SalesHistory";
+import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { CartItem, Product } from "@/lib/types";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function POSPage() {
   const router = useRouter();
@@ -19,7 +19,10 @@ export default function POSPage() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [todaySummary, setTodaySummary] = useState({ totalSales: 0, totalRevenue: '0' });
+  const [todaySummary, setTodaySummary] = useState({
+    totalSales: 0,
+    totalRevenue: "0",
+  });
   const searchRef = useRef<HTMLInputElement>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -112,7 +115,7 @@ export default function POSPage() {
         discount,
         amountPaid,
         paymentMethod,
-        terminalId: 'POS-01',
+        terminalId: "POS-01",
         userId: user?.id,
         userName: user?.name,
       });
@@ -122,7 +125,7 @@ export default function POSPage() {
       setShowCheckout(false);
       loadTodaySummary();
     } catch (err: any) {
-      alert(err.message || 'Checkout failed');
+      alert(err.message || "Checkout failed");
     }
   };
 
@@ -138,8 +141,8 @@ export default function POSPage() {
           <div className="text-right text-sm">
             <div className="text-blue-200">Today&apos;s Sales</div>
             <div className="font-bold">
-              {todaySummary.totalSales} txns | PHP{' '}
-              {Number(todaySummary.totalRevenue).toLocaleString('en-PH', {
+              {todaySummary.totalSales} txns | PHP{" "}
+              {Number(todaySummary.totalRevenue).toLocaleString("en-PH", {
                 minimumFractionDigits: 2,
               })}
             </div>
@@ -148,9 +151,9 @@ export default function POSPage() {
             onClick={() => setShowHistory(true)}
             className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
           >
-            Sales Today
+            Today&apos;s Sales
           </button>
-          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+          {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
             <Link
               href="/admin"
               className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
@@ -159,7 +162,10 @@ export default function POSPage() {
             </Link>
           )}
           <button
-            onClick={() => { auth.logout(); router.push('/login'); }}
+            onClick={() => {
+              auth.logout();
+              router.push("/login");
+            }}
             className="bg-red-600 hover:bg-red-500 px-4 py-2 rounded text-sm"
           >
             Logout
@@ -171,10 +177,7 @@ export default function POSPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Product Search */}
         <div className="w-1/2 border-r border-gray-200 flex flex-col">
-          <ProductSearch
-            ref={searchRef}
-            onAddToCart={addToCart}
-          />
+          <ProductSearch ref={searchRef} onAddToCart={addToCart} />
         </div>
 
         {/* Right: Cart */}
@@ -200,14 +203,14 @@ export default function POSPage() {
       )}
 
       {receipt && (
-        <ReceiptModal
-          sale={receipt}
-          onClose={() => setReceipt(null)}
-        />
+        <ReceiptModal sale={receipt} onClose={() => setReceipt(null)} />
       )}
 
       {showHistory && (
-        <SalesHistory onClose={() => setShowHistory(false)} cashier={user?.name} />
+        <SalesHistory
+          onClose={() => setShowHistory(false)}
+          cashier={user?.name}
+        />
       )}
     </div>
   );

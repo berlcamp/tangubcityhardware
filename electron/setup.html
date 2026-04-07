@@ -119,6 +119,17 @@
     document.getElementById('serverIp').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') save();
     });
+
+    // Pre-fill with saved IP (if any) so user can just press Enter to continue
+    if (window.electronSetup && window.electronSetup.getSavedIp) {
+      window.electronSetup.getSavedIp().then((saved) => {
+        if (saved) {
+          const input = document.getElementById('serverIp');
+          input.value = saved;
+          input.select();
+        }
+      });
+    }
   </script>
 </body>
 </html>
